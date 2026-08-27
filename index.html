@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<style>
+
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 20px;
+  background: #f8f9fa;
+}
+
+h2 {
+  margin-top: 0;
+}
+
+.tab-bar {
+  display: flex;
+  border-bottom: 1px solid #ddd;
+  margin-bottom: 20px;
+}
+
+.tab-button {
+  padding: 12px 20px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.tab-button.active {
+  color: #1a73e8;
+  border-bottom: 3px solid #1a73e8;
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px;
+  margin: 7px 0 15px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+}
+
+.submit-btn {
+  background: #1a73e8;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.delete-btn {
+  background: #d93025;
+  color: white;
+  border: none;
+  padding: 7px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+}
+
+th, td {
+  padding: 10px;
+  border-bottom: 1px solid #ddd;
+  text-align: left;
+}
+
+.message {
+  margin-top: 15px;
+  padding: 10px;
+  display: none;
+  border-radius: 5px;
+}
+
+.success {
+  background: #d9ead3;
+  color: #274e13;
+}
+
+.error {
+  background: #f4cccc;
+  color: #990000;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h2>Manage User</h2>
+
+<div class="tab-bar">
+
+  <button
+    class="tab-button active"
+    onclick="showTab('viewTab', this)">
+    View Tab
+  </button>
+
+  <button
+    class="tab-button"
+    onclick="showTab('createTab', this)">
+    Send / Create Tab
+  </button>
+
+</div>
+
+
+<!-- VIEW TAB -->
+
+<div id="viewTab" class="tab-content active">
+
+  <h3>Active Tabs</h3>
+
+  <table>
+
+    <thead>
+      <tr>
+        <th>Tab Name</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+
+    <tbody id="tabList">
+      <tr>
+        <td colspan="2">Loading...</td>
+      </tr>
+    </tbody>
+
+  </table>
+
+</div>
+
+
+<!-- CREATE TAB -->
+
+<div id="createTab" class="tab-content">
+
+  <h3>Create User Tab</h3>
+
+  <label>Tab Name</label>
+
+  <input
+    type="text"
+    id="tabName"
+    placeholder="Enter tab name">
+
+
+  <label>Email</label>
+
+  <input
+    type="email"
+    id="email"
+    placeholder="Enter user email">
+
+
+  <button
+    class="submit-btn"
+    onclick="createTab()">
+    Submit
+  </button>
+
+</div>
+
+
+<div id="message" class="message"></div>
+
+
+<script>
+
+function showTab(tabId, button) {
+
+  document.querySelectorAll('.tab-content')
+    .forEach(el => el.classList.remove('active'));
+
+  document.querySelectorAll('.tab-button')
+    .forEach(el => el.classList.remove('active'));
+
+  document.getElementById(tabId)
+    .classList.add('active');
+
+  button.classList.add('active');
+
+  if (tabId === 'viewTab') {
+    loadTabs();
+  }
+}
+
+
+function loadTabs() {
+
+  google.script.run
+    .withSuccessHandler(function(tabs) {
+
+      const tbody = document.getElementById('tabList');
+
+      tbody.innerHTML = '';
+
+      if (!tabs.length) {
+
+        tbody.innerHTML =
+          '<tr><td colspan="2">No active tabs found.</td></tr>';
+
+        return;
+      }
+
+      tabs.forEach(function(tab) {
+
+        const row = document.createElement('tr');
+
+        row.innerHTML = `
+          <td>${escapeHtml(tab.name)}</td>
+
+          <td>
+            <button
+              class="delete-btn"
+              onclick="deleteTab('${escapeJs(tab.name)}')">
+              Delete Tab
+            </button>
+          </td>
+        `;
+
+        tbody.appendChild(row);
+
+      });
+
+    })
+    .withFailureHandler(showError)
+    .getActiveTabs();
+}
+
+
+function createTab() {
+
+  const tabName =
+    document.getElementById('tabName').value.trim();
+
+  const email =
+    document.getElementById('email').value.trim();
+
+  if (!tabName) {
+    showError('Please enter a tab name.');
+    return;
+  }
+
+  if (!email) {
+    showError('Please enter an email.');
+    return;
+  }
+
+  showMessage('Creating tab...', false);
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+
+      showMessage(
+        'Tab "' + result.tabName +
+        '" created and access sent to ' +
+        result.email,
+        false
+      );
+
+      document.getElementById('tabName').value = '';
+      document.getElementById('email').value = '';
+
+      loadTabs();
+
+    })
+    .withFailureHandler(showError)
+    .createUserTab(tabName, email);
+}
+
+
+function deleteTab(tabName) {
+
+  if (!confirm(
+    'Delete tab "' + tabName +
+    '" and remove the user access?'
+  )) {
+    return;
+  }
+
+  showMessage('Deleting tab...', false);
+
+  google.script.run
+    .withSuccessHandler(function() {
+
+      showMessage(
+        'Tab deleted and user access removed.',
+        false
+      );
+
+      loadTabs();
+
+    })
+    .withFailureHandler(showError)
+    .deleteUserTab(tabName);
+}
+
+
+function showMessage(message, error) {
+
+  const el = document.getElementById('message');
+
+  el.innerText = message;
+
+  el.className =
+    'message ' + (error ? 'error' : 'success');
+
+  el.style.display = 'block';
+}
+
+
+function showError(error) {
+
+  showMessage(
+    error.message || error,
+    true
+  );
+}
+
+
+function escapeHtml(text) {
+
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+
+function escapeJs(text) {
+
+  return String(text)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'");
+}
+
+
+loadTabs();
+
+</script>
+
+</body>
+</html>
